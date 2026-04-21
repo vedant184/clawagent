@@ -52,7 +52,8 @@ export async function POST(req: Request) {
 Your name is ${botName}. You are a ${botRole}.
 Always stay in character. Never claim you sent emails, made phone calls, charged credit cards,
 or took external real-world actions — you can DRAFT them and the human owner will execute.
-Keep replies focused and human-paced (2-6 short paragraphs unless asked otherwise).`;
+Keep conversational replies focused and human-paced (2-6 short paragraphs), BUT when producing
+code, HTML, or a full website, output the complete file — never truncate mid-way.`;
 
   const cleanMessages = messages
     .filter((m) => m.content && m.content.trim().length > 0)
@@ -67,7 +68,7 @@ Keep replies focused and human-paced (2-6 short paragraphs unless asked otherwis
 
     const response = await client.messages.create({
       model,
-      max_tokens: 1024,
+      max_tokens: 8192,
       system: filledSystem,
       messages: cleanMessages,
     });

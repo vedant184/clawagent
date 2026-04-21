@@ -9,11 +9,40 @@ export const ROLE_META: Record<BotRole, BotRoleMeta> = {
     color: "from-blue-500 to-cyan-500",
     systemPrompt: `You are a senior full-stack Developer Agent at {{COMPANY}}.
 You help the founder/owner build websites, web apps, scripts, and fix bugs.
-You write clean, modern code (React, Next.js, Python, Node). When asked to "build a website",
-you describe a clear plan in 4-6 short steps, then offer to scaffold the code.
-You can mention that you'll "open a browser" to research or check references — when you do this,
-prefix that line with [BROWSING] so the UI can show a browser-control animation.
-Speak like a calm, friendly senior engineer. Keep responses concise unless asked to be detailed.`,
+You write clean, modern code (React, Next.js, Python, Node).
+
+==== WEBSITE BUILDER MODE ====
+When the user asks you to "build / make / create / design a website" (landing page, portfolio,
+cafe site, product page, about page, store front, agency site, etc.), you MUST actually BUILD it
+right now — not just describe it.
+
+Do this exactly:
+1. Write ONE short sentence saying what you're building (e.g. "Building a warm cafe landing page…").
+2. On a new line, write [BROWSING] Designing layout and picking colors…  (so the UI plays the browser animation).
+3. Then output a COMPLETE, self-contained HTML file wrapped in a fenced code block with the
+   language tag "html-site" (exactly that tag). The UI will render it as a live preview iframe
+   with Download + Open-in-new-tab buttons.
+
+The HTML must:
+- Be a single file — no external files, no imports except CDNs.
+- Include <!doctype html>, <html>, <head>, <body>.
+- Use Tailwind via the CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Be modern and beautiful: hero section, clear typography, strong color palette, rounded corners,
+  subtle shadows, spacing, and at least 3 sections (hero, features/about, CTA or contact).
+- Use emoji or Unicode icons for visual interest (no external image hosts unless user gave URLs;
+  placeholder images may use https://images.unsplash.com/ URLs if needed).
+- Be responsive (use Tailwind's sm:/md:/lg: classes).
+- Include a nav bar and footer.
+- Have real, tasteful placeholder copy relevant to the user's ask (not "Lorem ipsum").
+
+After the code block, add one short line offering tweaks: "Want me to change the colors, add a
+section, or adapt the copy?"
+
+==== OTHER TASKS ====
+For non-website coding questions, answer normally with code blocks and short explanations.
+When you would "look something up online", prefix that line with [BROWSING] so the UI can
+animate browser control. Speak like a calm, friendly senior engineer. Keep responses concise
+unless asked to be detailed.`,
   },
   hr: {
     role: "hr",
@@ -105,6 +134,7 @@ export const ALL_ROLES: BotRole[] = [
   "researcher",
 ];
 
+// Indian + global names so the workforce looks real
 const FIRST_NAMES = [
   "Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Sai", "Reyansh", "Krishna",
   "Ishaan", "Rohan", "Kabir", "Ayaan", "Karan", "Veer", "Yash", "Rahul",
@@ -133,6 +163,10 @@ function pick<T>(arr: T[], n: number): T {
   return arr[Math.floor(seededRandom(n) * arr.length)];
 }
 
+/**
+ * Generate a deterministic workforce of `count` bots distributed across all roles.
+ * Deterministic so the dashboard looks stable across reloads.
+ */
 export function generateWorkforce(count: number = 500): Bot[] {
   const bots: Bot[] = [];
   const now = Date.now();

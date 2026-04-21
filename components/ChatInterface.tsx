@@ -7,6 +7,7 @@ import { getRoleMeta } from "@/lib/bots";
 import { getChatHistory, saveChatHistory } from "@/lib/storage";
 import BotAvatar from "./BotAvatar";
 import BrowserAnimation from "./BrowserAnimation";
+import SitePreview from "./SitePreview";
 
 interface Props {
   bot: Bot;
@@ -19,9 +20,10 @@ function uid() {
 
 const SUGGESTIONS_BY_ROLE: Record<string, string[]> = {
   developer: [
+    "Build me a cozy coffee shop landing page",
     "Build me a one-page portfolio website",
+    "Design a sleek product page for a fitness app",
     "Fix this Python error: ...",
-    "What's the best stack for a small SaaS?",
   ],
   hr: [
     "Draft a job description for a junior designer",
@@ -68,6 +70,7 @@ export default function ChatInterface({ bot, profile }: Props) {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // load history
   useEffect(() => {
     const h = getChatHistory(bot.id);
     if (h.length === 0) {
@@ -82,8 +85,10 @@ export default function ChatInterface({ bot, profile }: Props) {
     } else {
       setMessages(h);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bot.id]);
 
+  // autoscroll
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -151,6 +156,7 @@ export default function ChatInterface({ bot, profile }: Props) {
     if (!confirm("Clear this conversation?")) return;
     setMessages([]);
     saveChatHistory(bot.id, []);
+    // re-trigger greeting on next render
     setTimeout(() => {
       const greeting: ChatMessage = {
         id: uid(),
@@ -168,6 +174,7 @@ export default function ChatInterface({ bot, profile }: Props) {
 
   return (
     <div className="flex flex-col h-screen">
+      {/* Header */}
       <header className="border-b border-brand-500/15 bg-bg/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
@@ -194,6 +201,7 @@ export default function ChatInterface({ bot, profile }: Props) {
         </div>
       </header>
 
+      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
           {messages.map((m) => (
@@ -238,6 +246,7 @@ export default function ChatInterface({ bot, profile }: Props) {
         </div>
       </div>
 
+      {/* Composer */}
       <div className="border-t border-brand-500/15 bg-bg/80 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-end gap-2 glass rounded-2xl p-2">
@@ -288,35 +297,71 @@ function MessageBubble({ msg, bot }: { msg: ChatMessage; bot: Bot }) {
     );
   }
 
-  const segments = splitOnBrowsing(msg.content);
+  // Assistant: render with optional browser animation / live site preview
+  const segments = parseAssistantContent(msg.content);
+  const hasSite = segments.some((s) => s.type === "site");
 
   return (
     <div className="flex items-start gap-3">
       <BotAvatar seed={bot.avatarSeed} size={36} emoji={meta.emoji} />
-      <div className="glass rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
-        {segments.map((seg, i) =>
-          seg.type === "browser" ? (
-            <BrowserAnimation
-              key={i}
-              task={seg.text || "Working in the browser…"}
-            />
-          ) : (
+      <div
+        className={`glass rounded-2xl rounded-tl-sm px-4 py-3 ${
+          hasSite ? "max-w-[95%] w-full" : "max-w-[85%]"
+        }`}
+      >
+        {segments.map((seg, i) => {
+          if (seg.type === "browser") {
+            return (
+              <BrowserAnimation
+                key={i}
+                task={seg.text || "Working in the browser…"}
+              />
+            );
+          }
+          if (seg.type === "site") {
+            return <SitePreview key={i} html={seg.text} />;
+          }
+          return (
             <p
               key={i}
               className="whitespace-pre-wrap text-brand-50 leading-relaxed"
             >
               {seg.text}
             </p>
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );
 }
 
 interface Segment {
-  type: "text" | "browser";
+  type: "text" | "browser" | "site";
   text: string;
+}
+
+/**
+ * Parse an assistant message into segments:
+ * - ```html-site ... ```  → live website preview
+ * - [BROWSING] ...         → browser-control animation
+ * - everything else        → plain text
+ */
+function parseAssistantContent(content: string): Segment[] {
+  const out: Segment[] = [];
+  const siteRegex = /```html-site\s*\n([\s\S]*?)```/gi;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = siteRegex.exec(content)) !== null) {
+    const before = content.slice(lastIndex, match.index);
+    if (before.trim().length) out.push(...splitOnBrowsing(before));
+    out.push({ type: "site", text: match[1].trim() });
+    lastIndex = match.index + match[0].length;
+  }
+  const tail = content.slice(lastIndex);
+  if (tail.trim().length) out.push(...splitOnBrowsing(tail));
+  if (out.length === 0) out.push({ type: "text", text: content });
+  return out;
 }
 
 function splitOnBrowsing(content: string): Segment[] {
@@ -326,7 +371,8 @@ function splitOnBrowsing(content: string): Segment[] {
 
   const flush = () => {
     if (buffer.length) {
-      out.push({ type: "text", text: buffer.join("\n").trim() });
+      const text = buffer.join("\n").trim();
+      if (text.length) out.push({ type: "text", text });
       buffer = [];
     }
   };
@@ -341,5 +387,5 @@ function splitOnBrowsing(content: string): Segment[] {
     }
   }
   flush();
-  return out.filter((s) => s.text.length > 0 || s.type === "browser");
+  return out;
 }

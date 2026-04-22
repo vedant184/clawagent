@@ -78,17 +78,27 @@ export default function SitePreview({ html }: Props) {
         </button>
         <div className="flex-1" />
         <button
-          onClick={openNewTab}
-          className="text-xs px-3 py-1.5 rounded-lg text-brand-100/80 hover:text-brand-100 hover:bg-brand-500/10"
-        >
-          ↗ Open in new tab
-        </button>
-        <button
           onClick={download}
           className="text-xs px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 border border-brand-400/40 text-brand-100"
         >
           ⬇ Download .html
         </button>
+      </div>
+
+      {/* Big "Open full website" CTA — obvious finish-line button */}
+      <div className="px-3 py-3 border-t border-brand-500/20 bg-gradient-to-r from-brand-500/10 via-bg-soft/40 to-brand-400/10">
+        <button
+          onClick={openNewTab}
+          disabled={!blobUrl}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 hover:from-brand-400 hover:to-brand-300 text-white font-semibold shadow-lg shadow-brand-500/30 transition-transform active:scale-[0.99] disabled:opacity-50"
+        >
+          <span className="text-lg">🌐</span>
+          Open full website in new tab
+          <span className="text-lg">↗</span>
+        </button>
+        <p className="text-[11px] text-brand-100/50 mt-2 text-center">
+          The website is ready — click above to view it in its own tab, or download the .html file.
+        </p>
       </div>
     </div>
   );

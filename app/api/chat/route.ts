@@ -66,22 +66,52 @@ code, HTML, or a full website, output the complete file — never truncate mid-w
     const client = new Anthropic({ apiKey });
     const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
 
+    // Give the bot a LIVE web_search tool (server-executed by Anthropic) so it can
+    // actually look up current info, latest docs, and real-world data instead of
+    // just pretending with the [BROWSING] marker. Uses the Messages API tools param.
+    // Disable with WEB_SEARCH_ENABLED=false env var if needed.
+    const webSearchEnabled = process.env.WEB_SEARCH_ENABLED !== "false";
+
+    // Typed loosely so the SDK accepts the server-tool shape without complaining.
+    const tools = webSearchEnabled
+      ? ([
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 5,
+          },
+        ] as unknown as Anthropic.Messages.Tool[])
+      : undefined;
+
     const response = await client.messages.create({
       model,
       max_tokens: 8192,
       system: filledSystem,
       messages: cleanMessages,
+      ...(tools ? { tools } : {}),
     });
 
+    // Stitch together all text blocks. Tool-use / tool-result blocks are emitted by
+    // the server-side web_search tool — we skip them here; the final text block
+    // already contains the assistant's synthesized answer with citations.
     const text = response.content
       .map((block) => (block.type === "text" ? block.text : ""))
       .filter(Boolean)
       .join("\n");
 
+    // Count how many web searches Claude actually ran, so the UI could show a badge.
+    const webSearches = response.content.filter(
+      (b) =>
+        (b.type === "server_tool_use" &&
+          (b as { name?: string }).name === "web_search") ||
+        b.type === "web_search_tool_result",
+    ).length;
+
     return NextResponse.json({
       reply: text,
       usage: response.usage,
       model: response.model,
+      webSearches,
     });
   } catch (err: unknown) {
     const message =

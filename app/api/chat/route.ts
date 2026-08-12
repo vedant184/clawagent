@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 interface IncomingMessage {
   role: "user" | "assistant";
@@ -15,6 +16,7 @@ interface RequestBody {
   companyName: string;
   botName: string;
   botRole: string;
+  stream?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -82,6 +84,55 @@ code, HTML, or a full website, output the complete file — never truncate mid-w
           },
         ] as unknown as Anthropic.Messages.Tool[])
       : undefined;
+
+    // ---- Streaming mode: token-by-token SSE passthrough ----
+    if (body.stream) {
+      const stream = await client.messages.create({
+        model,
+        max_tokens: 8192,
+        system: filledSystem,
+        messages: cleanMessages,
+        ...(tools ? { tools } : {}),
+        stream: true,
+      });
+
+      const encoder = new TextEncoder();
+      const rs = new ReadableStream({
+        async start(controller) {
+          const push = (obj: unknown) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+          try {
+            let searches = 0;
+            for await (const ev of stream) {
+              if (
+                ev.type === "content_block_start" &&
+                ((ev.content_block as { type?: string }).type as string) === "server_tool_use"
+              ) {
+                searches++;
+                push({ searching: true });
+              }
+              if (
+                ev.type === "content_block_delta" &&
+                (ev.delta as { type?: string }).type === "text_delta"
+              ) {
+                push({ t: (ev.delta as { text: string }).text });
+              }
+            }
+            push({ done: true, webSearches: searches });
+          } catch (e) {
+            push({ error: e instanceof Error ? e.message : "stream error" });
+          }
+          controller.close();
+        },
+      });
+
+      return new Response(rs, {
+        headers: {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache, no-transform",
+        },
+      });
+    }
 
     const response = await client.messages.create({
       model,

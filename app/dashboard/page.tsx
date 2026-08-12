@@ -40,6 +40,23 @@ interface Activity {
   ago: string;
 }
 
+interface Recent {
+  bot: Bot;
+  last: string;
+  when: string;
+}
+
+function timeAgo(ts: number) {
+  if (!ts) return "";
+  const d = Date.now() - ts;
+  const m = Math.floor(d / 60000);
+  if (m < 1) return "abhi";
+  if (m < 60) return `${m}m pehle`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h pehle`;
+  return `${Math.floor(h / 24)}d pehle`;
+}
+
 /* ---------- page ---------- */
 
 export default function DashboardPage() {
@@ -52,6 +69,7 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [recents, setRecents] = useState<Recent[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -71,6 +89,33 @@ export default function DashboardPage() {
   }, []);
 
   const workforce = useMemo<Bot[]>(() => generateWorkforce(BOT_COUNT), []);
+
+  /* recent conversations from local history */
+  useEffect(() => {
+    if (!profile) return;
+    try {
+      const items: { bot: Bot; last: string; ts: number }[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i) || "";
+        if (!k.startsWith("clawagent.chat.")) continue;
+        const botId = k.slice("clawagent.chat.".length);
+        const bot = workforce.find((b) => b.id === botId);
+        if (!bot) continue;
+        const msgs = JSON.parse(window.localStorage.getItem(k) || "[]");
+        if (!Array.isArray(msgs) || msgs.length < 2) continue;
+        const lastMsg = msgs[msgs.length - 1] as { content?: string; createdAt?: string };
+        items.push({
+          bot,
+          last: (lastMsg.content || "").replace(/\s+/g, " ").slice(0, 90),
+          ts: Date.parse(lastMsg.createdAt || "") || 0,
+        });
+      }
+      items.sort((a, b) => b.ts - a.ts);
+      setRecents(items.slice(0, 4).map((x) => ({ bot: x.bot, last: x.last, when: timeAgo(x.ts) })));
+    } catch {
+      /* localStorage unreadable — skip */
+    }
+  }, [profile, workforce]);
 
   /* rotating activity feed */
   useEffect(() => {
@@ -269,6 +314,28 @@ export default function DashboardPage() {
             <Stat label="Tasks par lage" value={stats.working} suffix="" tone="teal" delay={160} />
             <Stat label="Departments" value={ALL_ROLES.length} suffix="" tone="emerald" delay={240} />
           </section>
+
+          {/* Recent conversations */}
+          {recents.length > 0 && (
+            <section className="mb-7">
+              <h2 className="text-xs uppercase tracking-widest text-emerald-100/50 mb-3">🕑 Recent baat-cheet</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {recents.map((r) => (
+                  <Link key={r.bot.id} href={`/chat/${r.bot.id}`} className="ca-card ca-up rounded-2xl p-3.5 flex items-center gap-3 group hover:-translate-y-0.5 transition-all">
+                    <BotAvatar seed={r.bot.avatarSeed} size={38} emoji={getRoleMeta(r.bot.role).emoji} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-semibold truncate">{r.bot.name}</span>
+                        <span className="text-[10px] text-emerald-100/35 shrink-0">{r.when}</span>
+                      </div>
+                      <div className="text-xs text-emerald-100/55 truncate">{r.last}</div>
+                    </div>
+                    <span className="text-amber-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">→</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Activity feed */}
           <section className="ca-card rounded-2xl p-4 mb-8 overflow-hidden">

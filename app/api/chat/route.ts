@@ -102,9 +102,9 @@ code, HTML, or a full website, output the complete file — never truncate mid-w
     // Count how many web searches Claude actually ran, so the UI could show a badge.
     const webSearches = response.content.filter(
       (b) =>
-        (b.type === "server_tool_use" &&
+        ((b.type as string) === "server_tool_use" &&
           (b as { name?: string }).name === "web_search") ||
-        b.type === "web_search_tool_result",
+        (b.type as string) === "web_search_tool_result",
     ).length;
 
     return NextResponse.json({

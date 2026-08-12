@@ -67,6 +67,7 @@ export default function ChatInterface({ bot, profile }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [streamingId, setStreamingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -123,32 +124,87 @@ export default function ChatInterface({ bot, profile }: Props) {
           companyName: profile.companyName,
           botName: bot.name,
           botRole: meta.title,
+          stream: true,
           messages: next
             .filter((m) => m.role === "user" || m.role === "assistant")
             .map((m) => ({ role: m.role, content: m.content })),
         }),
       });
 
-      const data = await resp.json();
-      if (!resp.ok) {
-        throw new Error(data?.error || "Bot couldn't reply right now.");
-      }
+      const ct = resp.headers.get("content-type") || "";
 
-      const reply: ChatMessage = {
-        id: uid(),
-        role: "assistant",
-        content: data.reply || "(no reply)",
-        createdAt: new Date().toISOString(),
-        isBrowsing: /\[BROWSING\]/i.test(data.reply || ""),
-      };
-      const next2 = [...next, reply];
-      setMessages(next2);
-      saveChatHistory(bot.id, next2);
+      if (resp.ok && ct.includes("text/event-stream") && resp.body) {
+        // ---- Live streaming: reply types out token-by-token ----
+        const draftId = uid();
+        let acc = "";
+        let streamErr: string | null = null;
+        setStreamingId(draftId);
+        setMessages((cur) => [
+          ...cur,
+          { id: draftId, role: "assistant", content: "", createdAt: new Date().toISOString() },
+        ]);
+        try {
+          const reader = resp.body.getReader();
+          const dec = new TextDecoder();
+          let buf = "";
+          for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            buf += dec.decode(chunk.value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() || "";
+            for (const ln of lines) {
+              if (!ln.startsWith("data:")) continue;
+              let ev: { t?: string; error?: string } = {};
+              try { ev = JSON.parse(ln.slice(5)); } catch { continue; }
+              if (ev.t) {
+                acc += ev.t;
+                const now = acc;
+                setMessages((cur) => cur.map((m) => (m.id === draftId ? { ...m, content: now } : m)));
+              }
+              if (ev.error) streamErr = ev.error;
+            }
+          }
+        } catch {
+          /* network drop mid-stream — keep whatever arrived */
+        }
+        if (!acc.trim()) {
+          setMessages(next);
+          throw new Error(streamErr || "Bot couldn't reply right now.");
+        }
+        const reply: ChatMessage = {
+          id: draftId,
+          role: "assistant",
+          content: acc,
+          createdAt: new Date().toISOString(),
+          isBrowsing: /\[BROWSING\]/i.test(acc),
+        };
+        const next2 = [...next, reply];
+        setMessages(next2);
+        saveChatHistory(bot.id, next2);
+      } else {
+        // ---- Fallback: classic JSON reply ----
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data?.error || "Bot couldn't reply right now.");
+        }
+        const reply: ChatMessage = {
+          id: uid(),
+          role: "assistant",
+          content: data.reply || "(no reply)",
+          createdAt: new Date().toISOString(),
+          isBrowsing: /\[BROWSING\]/i.test(data.reply || ""),
+        };
+        const next2 = [...next, reply];
+        setMessages(next2);
+        saveChatHistory(bot.id, next2);
+      }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Unknown error";
       setError(message);
     } finally {
       setSending(false);
+      setStreamingId(null);
     }
   };
 
@@ -193,6 +249,22 @@ export default function ChatInterface({ bot, profile }: Props) {
             </div>
           </div>
           <button
+            onClick={() => {
+              const txt = messages
+                .map((m) => `${m.role === "user" ? profile.companyName : bot.name}: ${m.content}`)
+                .join("\n\n---\n\n");
+              const blob = new Blob([txt], { type: "text/plain" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = `${bot.name.replace(/\s+/g, "-")}-chat.txt`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            }}
+            className="text-xs text-brand-100/50 hover:text-brand-100 px-3 py-1.5 rounded-lg hover:bg-brand-500/10"
+          >
+            ⬇ Export
+          </button>
+          <button
             onClick={clearChat}
             className="text-xs text-brand-100/50 hover:text-brand-100 px-3 py-1.5 rounded-lg hover:bg-brand-500/10"
           >
@@ -208,7 +280,7 @@ export default function ChatInterface({ bot, profile }: Props) {
             <MessageBubble key={m.id} msg={m} bot={bot} />
           ))}
 
-          {sending && (
+          {sending && !streamingId && (
             <div className="flex items-start gap-3">
               <BotAvatar seed={bot.avatarSeed} size={36} emoji={meta.emoji} />
               <div className="glass rounded-2xl rounded-tl-sm px-4 py-3 inline-flex items-center">

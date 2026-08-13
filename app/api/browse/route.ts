@@ -50,26 +50,30 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
+// Remote Chromium pack (matches @sparticuz/chromium-min version) — fetched at
+// runtime so the serverless function stays well under Vercel's size limit.
+const CHROMIUM_PACK =
+  "https://github.com/Sparticuz/chromium/releases/download/v129.0.0/chromium-v129.0.0-pack.tar";
+
 async function launchBrowser() {
-  // On Vercel: use the @sparticuz/chromium binary. Locally: use whatever
-  // Chromium the machine already has (set LOCAL_CHROMIUM to its path).
-  const onVercel = !!process.env.VERCEL || process.env.NODE_ENV === "production";
   const puppeteer = (await import("puppeteer-core")).default;
 
-  if (onVercel && !process.env.LOCAL_CHROMIUM) {
-    const chromium = (await import("@sparticuz/chromium")).default;
+  // Local dev/test: use whatever Chromium the machine has (LOCAL_CHROMIUM path).
+  if (process.env.LOCAL_CHROMIUM) {
     return puppeteer.launch({
-      args: chromium.args,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
       defaultViewport: { width: 1280, height: 800 },
-      executablePath: await chromium.executablePath(),
+      executablePath: process.env.LOCAL_CHROMIUM,
       headless: true,
     });
   }
 
+  // Vercel: minimal chromium, binary pulled from the remote pack at runtime.
+  const chromium = (await import("@sparticuz/chromium-min")).default;
   return puppeteer.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
     defaultViewport: { width: 1280, height: 800 },
-    executablePath: process.env.LOCAL_CHROMIUM,
+    executablePath: await chromium.executablePath(CHROMIUM_PACK),
     headless: true,
   });
 }

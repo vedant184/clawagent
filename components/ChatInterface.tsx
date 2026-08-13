@@ -42,6 +42,7 @@ const SUGGESTIONS_BY_ROLE: Record<string, string[]> = {
     "Build me a one-page portfolio website",
     "Design a sleek product page for a fitness app",
     "Fix this Python error: ...",
+    "Meri site tooti hai — fix karke live chala kar dikhao: (code ya URL do)",
   ],
   debugger: [
     "Mera button click par kuch nahi karta — ye code debug karo: ...",
@@ -142,7 +143,7 @@ export default function ChatInterface({ bot, profile }: Props) {
     // ---- CLOUD BROWSER: a Debug Agent asked about a real URL actually opens
     // it in a real headless Chromium and shows real screenshots. ----
     let browseFacts = "";
-    if (bot.role === "debugger") {
+    if (bot.role === "debugger" || bot.role === "developer") {
       const found = extractUrl(text);
       if (found) {
         try {

@@ -53,7 +53,7 @@ function normalizeUrl(raw: string): string | null {
 // Remote Chromium pack (matches @sparticuz/chromium-min version) — fetched at
 // runtime so the serverless function stays well under Vercel's size limit.
 const CHROMIUM_PACK =
-  "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
+  "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.x64.tar";
 
 async function launchBrowser() {
   const puppeteer = (await import("puppeteer-core")).default;
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     page.on("console", (m) => {
       if (m.type() === "error") consoleErrors.push(m.text().slice(0, 300));
     });
-    page.on("pageerror", (e) => consoleErrors.push(String(e.message).slice(0, 300)));
+    page.on("pageerror", (e) => consoleErrors.push(String(e instanceof Error ? e.message : e).slice(0, 300)));
     const failedRequests: string[] = [];
     page.on("requestfailed", (r) => {
       const f = r.failure();

@@ -33,6 +33,14 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   isBrowsing?: boolean;
+  // Cloud-browser result card (real screenshots of a real page)
+  kind?: "browser";
+  browseUrl?: string;
+  browseTitle?: string;
+  shots?: string[]; // base64 JPEGs — kept in memory, not persisted
+  consoleErrors?: string[];
+  failedRequests?: string[];
+  httpStatus?: number;
 }
 
 export interface CompanyProfile {

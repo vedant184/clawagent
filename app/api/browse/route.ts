@@ -53,7 +53,7 @@ function normalizeUrl(raw: string): string | null {
 // Remote Chromium pack (matches @sparticuz/chromium-min version) — fetched at
 // runtime so the serverless function stays well under Vercel's size limit.
 const CHROMIUM_PACK =
-  "https://github.com/Sparticuz/chromium/releases/download/v129.0.0/chromium-v129.0.0-pack.tar";
+  "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
 
 async function launchBrowser() {
   const puppeteer = (await import("puppeteer-core")).default;
@@ -70,10 +70,17 @@ async function launchBrowser() {
 
   // Vercel: minimal chromium, binary pulled from the remote pack at runtime.
   const chromium = (await import("@sparticuz/chromium-min")).default;
+  const execPath = await chromium.executablePath(CHROMIUM_PACK);
+  // The pack ships its shared libraries next to the binary — make the loader see them.
+  const execDir = execPath.substring(0, execPath.lastIndexOf("/"));
+  const libPaths = [execDir, execDir + "/lib", "/tmp/al2023/lib", process.env.LD_LIBRARY_PATH || ""]
+    .filter(Boolean)
+    .join(":");
+  process.env.LD_LIBRARY_PATH = libPaths;
   return puppeteer.launch({
     args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
     defaultViewport: { width: 1280, height: 800 },
-    executablePath: await chromium.executablePath(CHROMIUM_PACK),
+    executablePath: execPath,
     headless: true,
   });
 }

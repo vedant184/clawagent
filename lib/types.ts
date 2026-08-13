@@ -1,5 +1,6 @@
 export type BotRole =
   | "developer"
+  | "debugger"
   | "hr"
   | "sales"
   | "support"

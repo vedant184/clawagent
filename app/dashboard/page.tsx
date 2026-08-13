@@ -22,6 +22,7 @@ function greeting(h: number) {
 
 const ACTIVITY_TEMPLATES: Record<BotRole, string[]> = {
   developer: ["shipped a landing page", "fixed a production bug", "reviewed a pull request"],
+  debugger: ["traced a console error", "fixed a broken button live", "verified a fix in the browser", "audited page performance"],
   hr: ["drafted a job post", "scheduled 3 interviews", "updated the handbook"],
   sales: ["sent 12 cold emails", "booked a demo call", "closed a follow-up"],
   support: ["resolved 8 tickets", "wrote a refund reply", "updated the FAQ"],

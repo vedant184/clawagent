@@ -25,6 +25,12 @@ const SUGGESTIONS_BY_ROLE: Record<string, string[]> = {
     "Design a sleek product page for a fitness app",
     "Fix this Python error: ...",
   ],
+  debugger: [
+    "Mera button click par kuch nahi karta — ye code debug karo: ...",
+    "Is console error ka matlab samjhao: ...",
+    "Ye page mobile par toota dikh raha hai — fix karke live dikhao",
+    "Meri site slow lagti hai — performance audit karo",
+  ],
   hr: [
     "Draft a job description for a junior designer",
     "Give me an onboarding checklist",

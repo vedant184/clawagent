@@ -18,6 +18,24 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+const URL_RE = /\bhttps?:\/\/[^\s<>()"']+/i;
+const BARE_RE =
+  /\b((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|in|app|dev|co|ai|xyz|shop|store|me|info|biz|us|uk|site|online|tech))(?:\/[^\s<>()"']*)?/i;
+
+function extractUrl(text: string): string | null {
+  const m = text.match(URL_RE);
+  if (m) return m[0].replace(/[.,)]+$/, "");
+  const b = text.match(BARE_RE);
+  if (b) return b[0].replace(/[.,)]+$/, "");
+  return null;
+}
+
+/** Screenshots are big — keep them in memory but never write them to
+ *  localStorage (would blow the quota). */
+function stripShots(list: ChatMessage[]): ChatMessage[] {
+  return list.map((m) => (m.shots ? { ...m, shots: undefined } : m));
+}
+
 const SUGGESTIONS_BY_ROLE: Record<string, string[]> = {
   developer: [
     "Build me a cozy coffee shop landing page",
@@ -116,12 +134,89 @@ export default function ChatInterface({ bot, profile }: Props) {
       content: text,
       createdAt: new Date().toISOString(),
     };
-    const next = [...messages, userMsg];
-    setMessages(next);
-    saveChatHistory(bot.id, next);
+    let convo = [...messages, userMsg];
+    setMessages(convo);
+    saveChatHistory(bot.id, stripShots(convo));
     setSending(true);
 
+    // ---- CLOUD BROWSER: a Debug Agent asked about a real URL actually opens
+    // it in a real headless Chromium and shows real screenshots. ----
+    let browseFacts = "";
+    if (bot.role === "debugger") {
+      const found = extractUrl(text);
+      if (found) {
+        try {
+          setStreamingId("browsing");
+          const br = await fetch("/api/browse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: found }),
+          });
+          const data = await br.json();
+          if (br.ok && data.ok) {
+            const card: ChatMessage = {
+              id: uid(),
+              role: "assistant",
+              content: "",
+              createdAt: new Date().toISOString(),
+              kind: "browser",
+              browseUrl: data.url,
+              browseTitle: data.title,
+              shots: data.shots,
+              consoleErrors: data.consoleErrors,
+              failedRequests: data.failedRequests,
+              httpStatus: data.httpStatus,
+            };
+            convo = [...convo, card];
+            setMessages(convo);
+            saveChatHistory(bot.id, stripShots(convo));
+            browseFacts =
+              `\n\n[LIVE BROWSER RESULT — I just opened ${data.url} in a real cloud Chromium]\n` +
+              `HTTP status: ${data.httpStatus}\nPage title: ${data.title}\n` +
+              (data.consoleErrors?.length
+                ? `Console errors:\n- ${data.consoleErrors.join("\n- ")}\n`
+                : "Console: no errors.\n") +
+              (data.failedRequests?.length
+                ? `Failed requests:\n- ${data.failedRequests.join("\n- ")}\n`
+                : "") +
+              `Visible text (excerpt):\n${(data.text || "").slice(0, 1500)}\n` +
+              `Use these REAL observations — refer to what you actually saw on the page.`;
+          } else {
+            const card: ChatMessage = {
+              id: uid(),
+              role: "assistant",
+              content: `⚠️ Cloud browser ${found} khol nahi paya: ${data.error || "unknown error"}`,
+              createdAt: new Date().toISOString(),
+            };
+            convo = [...convo, card];
+            setMessages(convo);
+            saveChatHistory(bot.id, stripShots(convo));
+          }
+        } catch {
+          /* browse failed — continue with a normal chat reply */
+        } finally {
+          setStreamingId(null);
+        }
+      }
+    }
+
     try {
+      const outgoing = convo
+        .filter(
+          (m) =>
+            m.role === "user" ||
+            (m.role === "assistant" && m.kind !== "browser" && m.content.trim().length > 0),
+        )
+        .map((m) => ({ role: m.role, content: m.content }));
+      if (browseFacts) {
+        for (let i = outgoing.length - 1; i >= 0; i--) {
+          if (outgoing[i].role === "user") {
+            outgoing[i] = { ...outgoing[i], content: outgoing[i].content + browseFacts };
+            break;
+          }
+        }
+      }
+
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,9 +226,7 @@ export default function ChatInterface({ bot, profile }: Props) {
           botName: bot.name,
           botRole: meta.title,
           stream: true,
-          messages: next
-            .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => ({ role: m.role, content: m.content })),
+          messages: outgoing,
         }),
       });
 
@@ -175,7 +268,7 @@ export default function ChatInterface({ bot, profile }: Props) {
           /* network drop mid-stream — keep whatever arrived */
         }
         if (!acc.trim()) {
-          setMessages(next);
+          setMessages(convo);
           throw new Error(streamErr || "Bot couldn't reply right now.");
         }
         const reply: ChatMessage = {
@@ -185,9 +278,9 @@ export default function ChatInterface({ bot, profile }: Props) {
           createdAt: new Date().toISOString(),
           isBrowsing: /\[BROWSING\]/i.test(acc),
         };
-        const next2 = [...next, reply];
-        setMessages(next2);
-        saveChatHistory(bot.id, next2);
+        const finalList = [...convo, reply];
+        setMessages(finalList);
+        saveChatHistory(bot.id, stripShots(finalList));
       } else {
         // ---- Fallback: classic JSON reply ----
         const data = await resp.json();
@@ -201,9 +294,9 @@ export default function ChatInterface({ bot, profile }: Props) {
           createdAt: new Date().toISOString(),
           isBrowsing: /\[BROWSING\]/i.test(data.reply || ""),
         };
-        const next2 = [...next, reply];
-        setMessages(next2);
-        saveChatHistory(bot.id, next2);
+        const finalList = [...convo, reply];
+        setMessages(finalList);
+        saveChatHistory(bot.id, stripShots(finalList));
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Unknown error";
@@ -359,9 +452,73 @@ export default function ChatInterface({ bot, profile }: Props) {
   );
 }
 
+function BrowserResultCard({ msg }: { msg: ChatMessage }) {
+  const shots = msg.shots || [];
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-lg shrink-0">
+        🌐
+      </div>
+      <div className="glass rounded-2xl rounded-tl-sm overflow-hidden max-w-[96%] w-full border border-cyan-400/30">
+        <div className="flex items-center gap-2 px-3 py-2 bg-black/30 border-b border-white/10">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+          <span className="ml-2 text-xs font-mono truncate text-brand-100/80">
+            🔒 {msg.browseUrl}
+          </span>
+          <span className="ml-auto shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+            ● LIVE{msg.httpStatus ? " " + msg.httpStatus : ""}
+          </span>
+        </div>
+        {shots.length > 0 ? (
+          <div className="space-y-2 p-2">
+            {shots.map((s, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={`data:image/jpeg;base64,${s}`}
+                alt={`Live screenshot ${i + 1}`}
+                className="w-full rounded-lg border border-white/10"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="px-3 py-3 text-xs text-brand-100/50">
+            🌐 Opened {msg.browseUrl} — real screenshot (reload hone par expire ho jata hai).
+          </div>
+        )}
+        {msg.browseTitle ? (
+          <div className="px-3 pb-2 text-xs text-brand-100/70">
+            <b>Title:</b> {msg.browseTitle}
+          </div>
+        ) : null}
+        {msg.consoleErrors && msg.consoleErrors.length > 0 && (
+          <div className="px-3 pb-3">
+            <div className="text-[11px] uppercase tracking-wider text-rose-300/80 mb-1">
+              Console errors ({msg.consoleErrors.length})
+            </div>
+            <ul className="text-xs text-rose-200/90 space-y-0.5 font-mono">
+              {msg.consoleErrors.slice(0, 6).map((e, i) => (
+                <li key={i} className="truncate">
+                  • {e}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MessageBubble({ msg, bot }: { msg: ChatMessage; bot: Bot }) {
   const meta = getRoleMeta(bot.role);
   const isUser = msg.role === "user";
+
+  if (msg.kind === "browser") {
+    return <BrowserResultCard msg={msg} />;
+  }
 
   if (isUser) {
     return (

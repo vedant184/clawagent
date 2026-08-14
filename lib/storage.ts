@@ -43,3 +43,24 @@ export function saveChatHistory(botId: string, messages: ChatMessage[]) {
     JSON.stringify(trimmed),
   );
 }
+
+/* ---- Shared Business Memory: every bot remembers this, in every chat ---- */
+const MEMORY_KEY = "clawagent.memory";
+
+export function getMemory(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(MEMORY_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveMemory(text: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(MEMORY_KEY, text.slice(0, 4000));
+  } catch {
+    /* quota — ignore */
+  }
+}

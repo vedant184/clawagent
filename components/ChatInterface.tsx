@@ -61,6 +61,37 @@ function getSpeechRecognition(): (new () => SpeechRecLike) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+/** Devanagari → Roman (Hinglish) so voice always TYPES in English letters,
+ *  no matter which script the recognizer returns. */
+const DEV_V: Record<string, string> = { अ: "a", आ: "aa", इ: "i", ई: "ee", उ: "u", ऊ: "oo", ऋ: "ri", ए: "e", ऐ: "ai", ओ: "o", औ: "au" };
+const DEV_C: Record<string, string> = { क: "k", ख: "kh", ग: "g", घ: "gh", ङ: "ng", च: "ch", छ: "chh", ज: "j", झ: "jh", ञ: "ny", ट: "t", ठ: "th", ड: "d", ढ: "dh", ण: "n", त: "t", थ: "th", द: "d", ध: "dh", न: "n", प: "p", फ: "f", ब: "b", भ: "bh", म: "m", य: "y", र: "r", ल: "l", ळ: "l", व: "v", श: "sh", ष: "sh", स: "s", ह: "h", "क़": "q", "ख़": "kh", "ग़": "g", "ज़": "z", "ड़": "r", "ढ़": "rh", "फ़": "f" };
+const DEV_M: Record<string, string> = { "ा": "aa", "ि": "i", "ी": "ee", "ु": "u", "ू": "oo", "ृ": "ri", "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ॉ": "o", "ॅ": "e" };
+const DEV_D: Record<string, string> = { "०": "0", "१": "1", "२": "2", "३": "3", "४": "4", "५": "5", "६": "6", "७": "7", "८": "8", "९": "9" };
+
+function romanizeDevanagari(s: string): string {
+  const isDev = (c: string | undefined) => !!c && /[ऀ-ॿ]/.test(c);
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (DEV_V[ch]) { out += DEV_V[ch]; continue; }
+    if (DEV_D[ch]) { out += DEV_D[ch]; continue; }
+    if (DEV_C[ch]) {
+      out += DEV_C[ch];
+      const nxt = s[i + 1];
+      if (nxt && DEV_M[nxt]) { out += DEV_M[nxt]; i++; }
+      else if (nxt === "्") { i++; }
+      else if (isDev(nxt) && nxt !== "ं" && nxt !== "ँ" && nxt !== "ः") { out += "a"; }
+      continue;
+    }
+    if (ch === "ं" || ch === "ँ") { out += "n"; continue; }
+    if (ch === "ः") { out += "h"; continue; }
+    if (ch === "।") { out += "."; continue; }
+    if (ch === "्") continue;
+    out += ch;
+  }
+  return out;
+}
+
 const SUGGESTIONS_BY_ROLE: Record<string, string[]> = {
   developer: [
     "Build me a cozy coffee shop landing page",
@@ -151,13 +182,14 @@ export default function ChatInterface({ bot, profile }: Props) {
     }
     setError(null);
     const rec = new Ctor();
-    rec.lang = "hi-IN"; // Hindi + English mix samajhta hai
+    rec.lang = "en-IN"; // Hinglish: Hindi + English dono samajhta hai, Roman mein likhta hai
     rec.continuous = true;
     rec.interimResults = true;
     voiceBaseRef.current = input.trim();
     rec.onresult = (e) => {
       let t = "";
       for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      t = romanizeDevanagari(t); // agar Devanagari aa bhi jaye to English letters mein badlo
       const base = voiceBaseRef.current;
       setInput((base ? base + " " : "") + t.trim());
     };

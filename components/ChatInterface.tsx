@@ -36,6 +36,59 @@ function stripShots(list: ChatMessage[]): ChatMessage[] {
   return list.map((m) => (m.shots ? { ...m, shots: undefined } : m));
 }
 
+interface PlannedAction {
+  type: "click" | "type" | "scroll" | "wait";
+  selector?: string;
+  text?: string;
+  why?: string;
+}
+
+/** Ask Claude to plan real browser actions from the page's clickable elements. */
+async function planBrowserActions(
+  userRequest: string,
+  pageTitle: string,
+  clickables: { selector: string; text: string; tag: string }[],
+): Promise<PlannedAction[]> {
+  try {
+    const resp = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemPrompt:
+          'You are a browser-automation planner. Reply with ONLY a JSON object, no prose, no code fences: {"actions":[{"type":"click|type|scroll|wait","selector":"<exact selector from the list>","text":"<only for type>","why":"<3-6 words>"}]} . Rules: max 3 actions; use ONLY selectors that appear verbatim in the provided list; prefer actions that help answer the user\'s request (open menu, click main CTA, scroll to see more); if simply viewing the page is enough, return {"actions":[]}. Never invent selectors.',
+        companyName: "Clawagent",
+        botName: "Planner",
+        botRole: "Browser Planner",
+        messages: [
+          {
+            role: "user",
+            content:
+              `User request: ${userRequest}\nPage title: ${pageTitle}\n` +
+              `Clickable elements (selector — "label" [tag]):\n` +
+              clickables
+                .slice(0, 40)
+                .map((c) => `${c.selector} — "${c.text}" [${c.tag}]`)
+                .join("\n"),
+          },
+        ],
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) return [];
+    const m = String(data.reply || "").match(/\{[\s\S]*\}/);
+    if (!m) return [];
+    const parsed = JSON.parse(m[0]) as { actions?: PlannedAction[] };
+    const valid = (parsed.actions || []).filter(
+      (a) =>
+        ["click", "type", "scroll", "wait"].includes(a.type) &&
+        (a.type === "scroll" || a.type === "wait" || (a.selector && clickables.some((c) => c.selector === a.selector))),
+    );
+    return valid.slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
 /* ---- Voice input (Web Speech API — built into Chrome/Edge) ---- */
 interface SpeechRecLike {
   lang: string;
@@ -266,8 +319,33 @@ export default function ChatInterface({ bot, profile }: Props) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url: found }),
           });
-          const data = await br.json();
+          let data = await br.json();
           if (br.ok && data.ok) {
+            // ---- AGENTIC PASS: plan real actions, then drive the browser ----
+            let actionNote = "";
+            try {
+              const plan = await planBrowserActions(text, data.title, data.clickables || []);
+              if (plan.length > 0) {
+                const br2 = await fetch("/api/browse", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ url: found, actions: plan }),
+                });
+                const data2 = await br2.json();
+                if (br2.ok && data2.ok) {
+                  data = data2; // richer: initial + per-action screenshots
+                  actionNote =
+                    `Actions I performed in the live browser:\n- ` +
+                    plan
+                      .map((a, i) => `${a.type}${a.selector ? " " + a.selector : ""}${a.why ? ` (${a.why})` : ""} → ${(data2.appliedActions || [])[i] || "?"}`)
+                      .join("\n- ") +
+                    "\n";
+                }
+              }
+            } catch {
+              /* planning failed — single-shot browse is still fine */
+            }
+
             const card: ChatMessage = {
               id: uid(),
               role: "assistant",
@@ -280,13 +358,15 @@ export default function ChatInterface({ bot, profile }: Props) {
               consoleErrors: data.consoleErrors,
               failedRequests: data.failedRequests,
               httpStatus: data.httpStatus,
+              appliedActions: data.appliedActions,
             };
             convo = [...convo, card];
             setMessages(convo);
             saveChatHistory(bot.id, stripShots(convo));
             browseFacts =
-              `\n\n[LIVE BROWSER RESULT — I just opened ${data.url} in a real cloud Chromium]\n` +
+              `\n\n[LIVE BROWSER RESULT — I just opened ${data.url} in a real cloud Chromium and drove it]\n` +
               `HTTP status: ${data.httpStatus}\nPage title: ${data.title}\n` +
+              actionNote +
               (data.consoleErrors?.length
                 ? `Console errors:\n- ${data.consoleErrors.join("\n- ")}\n`
                 : "Console: no errors.\n") +
@@ -294,7 +374,7 @@ export default function ChatInterface({ bot, profile }: Props) {
                 ? `Failed requests:\n- ${data.failedRequests.join("\n- ")}\n`
                 : "") +
               `Visible text (excerpt):\n${(data.text || "").slice(0, 1500)}\n` +
-              `Use these REAL observations — refer to what you actually saw on the page.`;
+              `Use these REAL observations and the actions above — refer to what you actually saw and did.`;
           } else {
             const card: ChatMessage = {
               id: uid(),
@@ -600,13 +680,19 @@ function BrowserResultCard({ msg }: { msg: ChatMessage }) {
         {shots.length > 0 ? (
           <div className="space-y-2 p-2">
             {shots.map((s, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={`data:image/jpeg;base64,${s}`}
-                alt={`Live screenshot ${i + 1}`}
-                className="w-full rounded-lg border border-white/10"
-              />
+              <div key={i}>
+                <div className="text-[11px] text-cyan-300/80 mb-1 px-1">
+                  {i === 0
+                    ? "📸 Step 1 — page khola"
+                    : `🖱️ Step ${i + 1} — ${(msg.appliedActions || [])[i - 1] || "action"}`}
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:image/jpeg;base64,${s}`}
+                  alt={`Live screenshot ${i + 1}`}
+                  className="w-full rounded-lg border border-white/10"
+                />
+              </div>
             ))}
           </div>
         ) : (

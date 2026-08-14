@@ -36,6 +36,31 @@ function stripShots(list: ChatMessage[]): ChatMessage[] {
   return list.map((m) => (m.shots ? { ...m, shots: undefined } : m));
 }
 
+/* ---- Voice input (Web Speech API — built into Chrome/Edge) ---- */
+interface SpeechRecLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult:
+    | ((e: {
+        results: { length: number; [i: number]: { 0: { transcript: string } } };
+      }) => void)
+    | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function getSpeechRecognition(): (new () => SpeechRecLike) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecLike;
+    webkitSpeechRecognition?: new () => SpeechRecLike;
+  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
+
 const SUGGESTIONS_BY_ROLE: Record<string, string[]> = {
   developer: [
     "Build me a cozy coffee shop landing page",
@@ -94,7 +119,63 @@ export default function ChatInterface({ bot, profile }: Props) {
   const [sending, setSending] = useState(false);
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recRef = useRef<SpeechRecLike | null>(null);
+  const voiceBaseRef = useRef("");
+
+  // stop mic when leaving the chat
+  useEffect(() => {
+    return () => {
+      try {
+        recRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  const toggleMic = () => {
+    if (listening) {
+      try {
+        recRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const Ctor = getSpeechRecognition();
+    if (!Ctor) {
+      setError("Voice input sirf Chrome/Edge browser mein chalta hai.");
+      return;
+    }
+    setError(null);
+    const rec = new Ctor();
+    rec.lang = "hi-IN"; // Hindi + English mix samajhta hai
+    rec.continuous = true;
+    rec.interimResults = true;
+    voiceBaseRef.current = input.trim();
+    rec.onresult = (e) => {
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      const base = voiceBaseRef.current;
+      setInput((base ? base + " " : "") + t.trim());
+    };
+    rec.onend = () => {
+      setListening(false);
+      recRef.current = null;
+    };
+    rec.onerror = () => {
+      setListening(false);
+    };
+    try {
+      rec.start();
+      recRef.current = rec;
+      setListening(true);
+    } catch {
+      setError("Mic start nahi hua — browser permission check karo.");
+    }
+  };
 
   // load history
   useEffect(() => {
@@ -437,6 +518,18 @@ export default function ChatInterface({ bot, profile }: Props) {
               style={{ minHeight: 40 }}
             />
             <button
+              onClick={toggleMic}
+              title={listening ? "Recording band karo" : "Bol kar likho (Hindi/English)"}
+              aria-label="Voice input"
+              className={`px-3 py-2.5 rounded-xl text-lg transition-all ${
+                listening
+                  ? "bg-rose-500/25 text-rose-300 animate-pulse ring-1 ring-rose-400/50"
+                  : "text-brand-100/60 hover:text-brand-100 hover:bg-brand-500/10"
+              }`}
+            >
+              {listening ? "🔴" : "🎤"}
+            </button>
+            <button
               onClick={() => send()}
               disabled={!input.trim() || sending}
               className="btn-primary px-5 py-2.5 rounded-xl text-white font-semibold"
@@ -445,7 +538,7 @@ export default function ChatInterface({ bot, profile }: Props) {
             </button>
           </div>
           <p className="text-[11px] text-brand-100/40 mt-2 text-center">
-            ↵ to send · Shift+↵ for newline · Bots can make mistakes — double-check important info.
+            ↵ to send · Shift+↵ for newline · 🎤 se bol kar likho · Bots can make mistakes — double-check important info.
           </p>
         </div>
       </div>

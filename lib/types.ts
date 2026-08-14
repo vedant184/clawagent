@@ -41,6 +41,7 @@ export interface ChatMessage {
   consoleErrors?: string[];
   failedRequests?: string[];
   httpStatus?: number;
+  appliedActions?: string[]; // agentic steps the bot performed (click/type/scroll)
 }
 
 export interface CompanyProfile {

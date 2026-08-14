@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, ChatMessage, CompanyProfile } from "@/lib/types";
 import { getRoleMeta } from "@/lib/bots";
-import { getChatHistory, saveChatHistory } from "@/lib/storage";
+import { getChatHistory, saveChatHistory, getMemory } from "@/lib/storage";
 import BotAvatar from "./BotAvatar";
 import BrowserAnimation from "./BrowserAnimation";
 import SitePreview from "./SitePreview";
@@ -412,11 +412,16 @@ export default function ChatInterface({ bot, profile }: Props) {
         }
       }
 
+      const memory = getMemory().trim();
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          systemPrompt: meta.systemPrompt,
+          systemPrompt:
+            meta.systemPrompt +
+            (memory
+              ? `\n\n==== BUSINESS MEMORY (saved by the owner — always true for ${profile.companyName}; use it naturally in every relevant answer, never ask for these details again) ====\n${memory.slice(0, 2500)}`
+              : ""),
           companyName: profile.companyName,
           botName: bot.name,
           botRole: meta.title,

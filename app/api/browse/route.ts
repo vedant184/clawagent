@@ -165,6 +165,55 @@ export async function POST(req: Request) {
     const title = await page.title().catch(() => "");
     const text = (await page.evaluate(() => document.body?.innerText || "").catch(() => "")).slice(0, 2500);
 
+    // Clickable elements with stable CSS paths — so the agent can PLAN real actions
+    const clickables = (await page
+      .evaluate(() => {
+        function cssPath(start: Element): string {
+          const parts: string[] = [];
+          let node: Element | null = start;
+          for (let d = 0; node && d < 5 && node.tagName.toLowerCase() !== "html"; d++) {
+            if (node.id) {
+              parts.unshift("#" + CSS.escape(node.id));
+              return parts.join(" > ");
+            }
+            let sel = node.tagName.toLowerCase();
+            const parent: Element | null = node.parentElement;
+            if (parent) {
+              const sibs = Array.from(parent.children).filter(
+                (c) => c.tagName === node!.tagName,
+              );
+              if (sibs.length > 1) sel += `:nth-of-type(${sibs.indexOf(node) + 1})`;
+            }
+            parts.unshift(sel);
+            node = parent;
+          }
+          return parts.join(" > ");
+        }
+        const out: { selector: string; text: string; tag: string }[] = [];
+        const els = document.querySelectorAll(
+          'a, button, input, select, textarea, [role="button"]',
+        );
+        for (const el of Array.from(els)) {
+          if (out.length >= 40) break;
+          const r = el.getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          const anyEl = el as HTMLElement & { value?: string; placeholder?: string };
+          const label = (
+            anyEl.innerText ||
+            anyEl.value ||
+            anyEl.placeholder ||
+            anyEl.getAttribute("aria-label") ||
+            ""
+          )
+            .trim()
+            .replace(/\s+/g, " ")
+            .slice(0, 60);
+          out.push({ selector: cssPath(el), text: label, tag: el.tagName.toLowerCase() });
+        }
+        return out;
+      })
+      .catch(() => [])) as { selector: string; text: string; tag: string }[];
+
     await browser.close();
     browser = null;
 
@@ -174,6 +223,7 @@ export async function POST(req: Request) {
       httpStatus,
       title,
       text,
+      clickables,
       consoleErrors: consoleErrors.slice(0, 20),
       failedRequests: failedRequests.slice(0, 15),
       appliedActions: applied,

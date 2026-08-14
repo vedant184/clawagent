@@ -59,6 +59,7 @@ async function planBrowserActions(
         companyName: "Clawagent",
         botName: "Planner",
         botRole: "Browser Planner",
+        noTools: true,
         messages: [
           {
             role: "user",

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearProfile, getProfile } from "@/lib/storage";
+import { clearProfile, getProfile, getMemory, saveMemory } from "@/lib/storage";
 import { ALL_ROLES, generateWorkforce, getRoleMeta } from "@/lib/bots";
 import { Bot, BotRole, CompanyProfile } from "@/lib/types";
 import BotAvatar from "@/components/BotAvatar";
@@ -71,7 +71,14 @@ export default function DashboardPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [recents, setRecents] = useState<Recent[]>([]);
+  const [memOpen, setMemOpen] = useState(false);
+  const [memText, setMemText] = useState("");
+  const [memSaved, setMemSaved] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (memOpen) setMemText(getMemory());
+  }, [memOpen]);
 
   useEffect(() => {
     const p = getProfile();
@@ -244,6 +251,12 @@ export default function DashboardPage() {
         </nav>
 
         <div className="p-4 border-t border-emerald-500/10">
+          <button
+            onClick={() => setMemOpen(true)}
+            className="w-full text-left text-sm px-3 py-2 mb-1 rounded-lg text-amber-300/90 hover:bg-amber-500/10 transition-colors"
+          >
+            🧠 Business Memory
+          </button>
           <div className="text-xs text-emerald-100/50 mb-2">Powered by Clawagent</div>
           <button onClick={handleLogout} className="w-full text-left text-sm px-3 py-2 rounded-lg text-emerald-100/70 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
             ⎋ Sign out
@@ -402,6 +415,38 @@ export default function DashboardPage() {
           onClose={() => setPaletteOpen(false)}
           onPick={(id) => { setPaletteOpen(false); router.push(`/chat/${id}`); }}
         />
+      )}
+
+      {memOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 bg-black/60 backdrop-blur-sm" onClick={() => setMemOpen(false)}>
+          <div className="ca-up w-full max-w-xl rounded-2xl overflow-hidden border border-amber-400/30 bg-[#0a1815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 pt-5">
+              <h3 className="font-bold text-lg">🧠 Business Memory</h3>
+              <p className="text-xs text-emerald-100/55 mt-1">
+                Yahan apne business ki details likho — <b>saare 500 employees</b> har chat mein inhe yaad rakhenge. Kabhi bhi update kar sakte ho.
+              </p>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={memText}
+                onChange={(e) => { setMemText(e.target.value); setMemSaved(false); }}
+                rows={8}
+                placeholder={"Jaise:\n- Hum Jaipur mein ek sweet shop chalate hain — 'Raj Mishthan'\n- Speciality: ghewar aur kaju katli\n- Customers se Hindi mein baat karo, tone friendly\n- Website: rajmishthan.com · Insta: @rajmishthan"}
+                className="w-full bg-emerald-950/40 border border-emerald-500/20 focus:border-amber-400/50 outline-none rounded-xl p-3 text-sm placeholder:text-emerald-100/30 resize-none"
+              />
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={() => { saveMemory(memText); setMemSaved(true); setTimeout(() => setMemOpen(false), 700); }}
+                  className="px-6 py-2.5 rounded-xl font-semibold text-emerald-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:brightness-110 transition-all"
+                >
+                  {memSaved ? "✓ Save ho gaya!" : "Save karo"}
+                </button>
+                <button onClick={() => setMemOpen(false)} className="text-sm text-emerald-100/60 hover:text-emerald-100">Band karo</button>
+                <span className="ml-auto text-[11px] text-emerald-100/35">{memText.length}/4000</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

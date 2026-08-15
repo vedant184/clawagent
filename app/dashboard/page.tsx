@@ -75,11 +75,23 @@ export default function DashboardPage() {
   const [memText, setMemText] = useState("");
   const [memSaved, setMemSaved] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [pairCode, setPairCode] = useState("····-····");
+  const [notify, setNotify] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (memOpen) setMemText(getMemory());
   }, [memOpen]);
+
+  useEffect(() => {
+    if (!browserOpen) return;
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const gen = (n: number) =>
+      Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    setPairCode(`${gen(4)}-${gen(4)}`);
+    setNotify(false);
+  }, [browserOpen]);
 
   useEffect(() => {
     const p = getProfile();
@@ -263,6 +275,13 @@ export default function DashboardPage() {
             className="w-full text-left text-sm px-3 py-2 mb-1 rounded-lg text-cyan-300/90 hover:bg-cyan-500/10 transition-colors"
           >
             🔌 Connections
+          </button>
+          <button
+            onClick={() => setBrowserOpen(true)}
+            className="w-full text-left text-sm px-3 py-2 mb-1 rounded-lg text-sky-300/90 hover:bg-sky-500/10 transition-colors flex items-center gap-2"
+          >
+            🖥️ Connect Browser
+            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/25">soon</span>
           </button>
           <div className="text-xs text-emerald-100/50 mb-2">Powered by Clawagent</div>
           <button onClick={handleLogout} className="w-full text-left text-sm px-3 py-2 rounded-lg text-emerald-100/70 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
@@ -504,7 +523,137 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {browserOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh] px-4 bg-black/60 backdrop-blur-sm" onClick={() => setBrowserOpen(false)}>
+          <div className="ca-up w-full max-w-2xl rounded-2xl overflow-hidden border border-sky-400/30 bg-[#0a1815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 pt-5 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                  🖥️ Connect Browser
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">Coming soon</span>
+                </h3>
+                <p className="text-xs text-emerald-100/55 mt-1">
+                  Apna browser jodo — phir bots aapke <b>saamne</b> Google, Facebook, WhatsApp jaise sites pe kaam karte hue dikhein. Live preview neeche 👇
+                </p>
+              </div>
+              <button onClick={() => setBrowserOpen(false)} className="text-emerald-100/50 hover:text-emerald-100 text-lg leading-none">✕</button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[66vh] overflow-y-auto">
+              {/* LIVE control preview — the CONTROLLED site is what shows, being driven */}
+              <LiveBrowserDemo />
+
+              {/* pairing code */}
+              <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-4 text-center">
+                <div className="text-[11px] uppercase tracking-widest text-sky-200/60 mb-1">Pairing code (demo)</div>
+                <div className="font-mono text-2xl font-bold tracking-[0.3em] text-sky-200">{pairCode}</div>
+                <p className="text-[11px] text-emerald-100/45 mt-1">Jab extension ready hoga, ye code usme daalke browser paired ho jayega.</p>
+              </div>
+
+              {/* how it will work */}
+              <div className="text-sm">
+                <div className="font-semibold text-emerald-200 mb-1.5">Ye aise kaam karega:</div>
+                <ol className="list-decimal list-inside space-y-1 text-emerald-100/70 text-[13px]">
+                  <li>ClawAgent ka <b>Chrome extension</b> install karo</li>
+                  <li>Upar wala <b>pairing code</b> extension me daalo</li>
+                  <li>Bots aapke saamne current page pe kaam karein — aap kabhi bhi rok sakte ho</li>
+                </ol>
+              </div>
+
+              {/* honest note */}
+              <div className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3 text-[12px] text-amber-100/70">
+                <b className="text-amber-300">Dhyan do:</b> Browser control tabhi chalega jab aap saamne ho (safety ke liye). Facebook/Google/WhatsApp par <b>auto-login nahi</b> hota — wo platforms bots ko ban karte hain. Un par real, apne-aap sending ke liye 🔌 <b>Connections</b> (official API) use karo.
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setNotify(true)}
+                  disabled={notify}
+                  className="px-5 py-2 rounded-xl font-semibold text-emerald-950 bg-gradient-to-r from-sky-400 to-emerald-300 hover:brightness-110 transition-all disabled:opacity-70"
+                >
+                  {notify ? "✓ Ready hone par bata denge!" : "🔔 Ready ho toh notify karo"}
+                </button>
+                <button onClick={() => setBrowserOpen(false)} className="text-sm text-emerald-100/60 hover:text-emerald-100">Band karo</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+/* An animated preview of a browser being driven by the AI. Pure front-end demo:
+   the CONTROLLED site (Google/Facebook/WhatsApp) is what shows on screen, with a
+   moving cursor + live caption — so the user sees "the thing being controlled",
+   not ClawAgent's own UI. Clearly watermarked Preview/Demo. */
+const DEMO_STEPS = [
+  { url: "google.com", tint: "from-blue-500/20 to-emerald-500/10", icon: "🔍", cap: "Google khol raha hoon…", cursor: [46, 40], target: "search" },
+  { url: "google.com/search?q=best+cafe+near+me", tint: "from-blue-500/20 to-blue-400/10", icon: "🔍", cap: "Search type karke Enter daba raha hoon…", cursor: [30, 66], target: "result" },
+  { url: "facebook.com/yourpage", tint: "from-blue-600/25 to-indigo-500/10", icon: "📘", cap: "Facebook page khol raha hoon…", cursor: [70, 52], target: "post" },
+  { url: "facebook.com/yourpage/composer", tint: "from-blue-600/25 to-indigo-500/10", icon: "📘", cap: "Post likhkar Share daba raha hoon…", cursor: [82, 74], target: "share" },
+  { url: "web.whatsapp.com", tint: "from-emerald-500/25 to-teal-500/10", icon: "💬", cap: "WhatsApp pe customer ko reply bhej raha hoon…", cursor: [80, 78], target: "send" },
+  { url: "✓ saare kaam done", tint: "from-emerald-500/25 to-emerald-400/10", icon: "✅", cap: "Kaam ho gaya!", cursor: [50, 48], target: "done" },
+];
+
+function LiveBrowserDemo() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setI((p) => (p + 1) % DEMO_STEPS.length), 1900);
+    return () => clearInterval(iv);
+  }, []);
+  const s = DEMO_STEPS[i];
+  return (
+    <div className="rounded-lg overflow-hidden border border-emerald-500/15 bg-[#0d1a17] relative">
+      {/* title bar */}
+      <div className="flex items-center gap-1.5 px-3 py-2 bg-black/40 border-b border-emerald-500/10">
+        <span className="w-2.5 h-2.5 rounded-full bg-rose-400/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/70" />
+        <div className="ml-2 flex-1 h-6 rounded-md bg-emerald-950/60 border border-emerald-500/10 flex items-center px-2 gap-1.5 text-[11px] text-emerald-100/60 font-mono min-w-0">
+          <span>🔒</span><span className="truncate">{s.url}</span>
+        </div>
+        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-400/30 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 ca-ring" /> live
+        </span>
+      </div>
+      {/* screen — the site being controlled */}
+      <div className={`relative h-40 bg-gradient-to-br ${s.tint} p-4 overflow-hidden`}>
+        <div className="text-3xl mb-2">{s.icon}</div>
+        <div className="space-y-1.5">
+          <div className="h-2.5 w-2/3 rounded bg-white/10" />
+          <div className="h-2.5 w-1/2 rounded bg-white/10" />
+          <div
+            className={`h-7 w-44 rounded-md mt-2 border flex items-center px-2 text-[11px] transition-colors ${
+              s.target === "done" ? "bg-emerald-400/20 border-emerald-300/40 text-emerald-100" : "bg-white/10 border-white/15 text-white/70"
+            }`}
+          >
+            {s.target === "search" && "best cafe near me|"}
+            {s.target === "result" && "▸ Top result open kar raha hoon"}
+            {s.target === "post" && "＋ Naya post banao"}
+            {s.target === "share" && "Share ▶"}
+            {s.target === "send" && "Send ▶"}
+            {s.target === "done" && "✓ complete"}
+          </div>
+        </div>
+        {/* animated cursor moving over the controlled page */}
+        <div
+          className="absolute text-lg transition-all duration-700 ease-out pointer-events-none drop-shadow-lg"
+          style={{ left: `${s.cursor[0]}%`, top: `${s.cursor[1]}%` }}
+        >
+          🖱️
+        </div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[13px] font-bold uppercase tracking-[0.25em] text-white/10 -rotate-6 pointer-events-none select-none">
+          Preview • Demo
+        </div>
+      </div>
+      {/* caption */}
+      <div className="px-3 py-2 bg-black/40 border-t border-emerald-500/10 text-[12px] text-sky-200/85 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-400 ca-ring shrink-0" />
+        <span className="truncate">🤖 ClawAgent aapka browser control kar raha hai — {s.cap}</span>
+      </div>
+    </div>
   );
 }
 

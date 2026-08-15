@@ -509,6 +509,18 @@ export default function DashboardPage() {
                   META_PAGE_TOKEN=EAAB…<br />META_PAGE_ID=9876543210
                 </div>
               </div>
+              <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-4">
+                <div className="font-semibold text-sky-300 mb-1.5">✈️ Telegram (Bot API)</div>
+                <ol className="list-decimal list-inside space-y-1 text-emerald-100/70 text-[13px]">
+                  <li>Telegram me <b>@BotFather</b> kholo → <b>/newbot</b> → naam do</li>
+                  <li>Wo ek <b>Bot Token</b> dega — copy karo</li>
+                  <li>Vercel env vars mein add karo:</li>
+                </ol>
+                <div className="mt-2 font-mono text-[12px] bg-black/40 rounded-lg p-2.5 text-cyan-200">
+                  TELEGRAM_BOT_TOKEN=123456:ABC-DEF…
+                </div>
+                <p className="text-[11px] text-emerald-100/45 mt-1.5">Sabse easy setup — 1 minute me ho jata hai. Customer ko pehle bot pe <b>Start</b> dabana padta hai (Telegram ka rule).</p>
+              </div>
               <p className="text-[12px] text-emerald-100/50">
                 Env vars add karne ke baad Vercel pe <b>Redeploy</b> karo. Phir kisi Sales/Support/Marketing
                 bot se bolo — <i>&quot;9198… pe WhatsApp bhejo ki order ready hai&quot;</i> — bot ek send-card

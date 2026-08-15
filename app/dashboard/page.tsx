@@ -74,6 +74,7 @@ export default function DashboardPage() {
   const [memOpen, setMemOpen] = useState(false);
   const [memText, setMemText] = useState("");
   const [memSaved, setMemSaved] = useState(false);
+  const [connOpen, setConnOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -256,6 +257,12 @@ export default function DashboardPage() {
             className="w-full text-left text-sm px-3 py-2 mb-1 rounded-lg text-amber-300/90 hover:bg-amber-500/10 transition-colors"
           >
             🧠 Business Memory
+          </button>
+          <button
+            onClick={() => setConnOpen(true)}
+            className="w-full text-left text-sm px-3 py-2 mb-1 rounded-lg text-cyan-300/90 hover:bg-cyan-500/10 transition-colors"
+          >
+            🔌 Connections
           </button>
           <div className="text-xs text-emerald-100/50 mb-2">Powered by Clawagent</div>
           <button onClick={handleLogout} className="w-full text-left text-sm px-3 py-2 rounded-lg text-emerald-100/70 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
@@ -443,6 +450,55 @@ export default function DashboardPage() {
                 </button>
                 <button onClick={() => setMemOpen(false)} className="text-sm text-emerald-100/60 hover:text-emerald-100">Band karo</button>
                 <span className="ml-auto text-[11px] text-emerald-100/35">{memText.length}/4000</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {connOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/60 backdrop-blur-sm" onClick={() => setConnOpen(false)}>
+          <div className="ca-up w-full max-w-xl rounded-2xl overflow-hidden border border-cyan-400/30 bg-[#0a1815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 pt-5">
+              <h3 className="font-bold text-lg">🔌 Connections — WhatsApp & Facebook</h3>
+              <p className="text-xs text-emerald-100/55 mt-1">
+                Sales, Support aur Marketing bots <b>real WhatsApp messages</b> bhej sakte hain aur{" "}
+                <b>Facebook Page pe post</b> kar sakte hain — official Meta APIs se. Har message aapke
+                click ke baad hi jata hai.
+              </p>
+            </div>
+            <div className="p-5 space-y-4 text-sm max-h-[60vh] overflow-y-auto">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/40 p-4">
+                <div className="font-semibold text-emerald-300 mb-1.5">💬 WhatsApp (Meta Cloud API)</div>
+                <ol className="list-decimal list-inside space-y-1 text-emerald-100/70 text-[13px]">
+                  <li><span className="text-emerald-100">developers.facebook.com</span> pe app banao → WhatsApp product add karo</li>
+                  <li>Wahan se <b>Access Token</b> aur <b>Phone Number ID</b> copy karo</li>
+                  <li>Vercel → Project → Settings → <b>Environment Variables</b> mein add karo:</li>
+                </ol>
+                <div className="mt-2 font-mono text-[12px] bg-black/40 rounded-lg p-2.5 text-cyan-200">
+                  WHATSAPP_TOKEN=EAAB…<br />WHATSAPP_PHONE_ID=1234567890
+                </div>
+              </div>
+              <div className="rounded-xl border border-blue-500/20 bg-blue-950/20 p-4">
+                <div className="font-semibold text-blue-300 mb-1.5">📘 Facebook Page (Graph API)</div>
+                <ol className="list-decimal list-inside space-y-1 text-emerald-100/70 text-[13px]">
+                  <li>Usi Meta app mein <b>Page access token</b> generate karo (permission: pages_manage_posts)</li>
+                  <li>Apni Page ki <b>Page ID</b> note karo</li>
+                  <li>Vercel env vars mein add karo:</li>
+                </ol>
+                <div className="mt-2 font-mono text-[12px] bg-black/40 rounded-lg p-2.5 text-cyan-200">
+                  META_PAGE_TOKEN=EAAB…<br />META_PAGE_ID=9876543210
+                </div>
+              </div>
+              <p className="text-[12px] text-emerald-100/50">
+                Env vars add karne ke baad Vercel pe <b>Redeploy</b> karo. Phir kisi Sales/Support/Marketing
+                bot se bolo — <i>&quot;9198… pe WhatsApp bhejo ki order ready hai&quot;</i> — bot ek send-card
+                banayega, aap Send dabaoge, message chala jayega. ✅
+                <br />Note: WhatsApp ka niyam — naye customer ko pehle template message ya unke reply ke 24h
+                window mein hi bhej sakte ho (ye Meta ka rule hai).
+              </p>
+              <div className="flex">
+                <button onClick={() => setConnOpen(false)} className="ml-auto text-sm text-emerald-100/60 hover:text-emerald-100">Band karo</button>
               </div>
             </div>
           </div>

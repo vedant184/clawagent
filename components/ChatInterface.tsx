@@ -780,6 +780,9 @@ function MessageBubble({ msg, bot }: { msg: ChatMessage; bot: Bot }) {
           if (seg.type === "fbpost") {
             return <ActionCard key={i} kind="fbpost" text={seg.text} />;
           }
+          if (seg.type === "telegram") {
+            return <ActionCard key={i} kind="telegram" to={seg.to} text={seg.text} />;
+          }
           return (
             <p
               key={i}
@@ -795,7 +798,7 @@ function MessageBubble({ msg, bot }: { msg: ChatMessage; bot: Bot }) {
 }
 
 interface Segment {
-  type: "text" | "browser" | "site" | "whatsapp" | "fbpost";
+  type: "text" | "browser" | "site" | "whatsapp" | "fbpost" | "telegram";
   text: string;
   to?: string;
 }
@@ -810,7 +813,7 @@ interface Segment {
  */
 function parseAssistantContent(content: string): Segment[] {
   const out: Segment[] = [];
-  const fenceRegex = /```(html-site|whatsapp|facebook-post)\s*\n([\s\S]*?)```/gi;
+  const fenceRegex = /```(html-site|whatsapp|facebook-post|telegram)\s*\n([\s\S]*?)```/gi;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -835,6 +838,13 @@ function parseAssistantContent(content: string): Segment[] {
       } catch {
         out.push({ type: "fbpost", text: inner });
       }
+    } else if (kind === "telegram") {
+      try {
+        const o = JSON.parse(inner) as { to?: string; text?: string; message?: string };
+        out.push({ type: "telegram", to: String(o.to || ""), text: String(o.text || o.message || "") });
+      } catch {
+        out.push({ type: "text", text: inner });
+      }
     }
     lastIndex = match.index + match[0].length;
   }
@@ -845,19 +855,54 @@ function parseAssistantContent(content: string): Segment[] {
 }
 
 /** Confirm-and-send card — kuch bhi USER ke click ke bina nahi jata. */
-function ActionCard({ kind, to, text }: { kind: "whatsapp" | "fbpost"; to?: string; text: string }) {
+type ActionKind = "whatsapp" | "fbpost" | "telegram";
+
+const ACTION_META: Record<
+  ActionKind,
+  { api: string; title: string; border: string; btn: string; cta: string; sent: string; showTo: boolean }
+> = {
+  whatsapp: {
+    api: "/api/whatsapp",
+    title: "🟢 WhatsApp message",
+    border: "border-emerald-400/40 bg-emerald-500/5",
+    btn: "bg-emerald-600 hover:bg-emerald-500",
+    cta: "📲 Send on WhatsApp",
+    sent: "✅ Bhej diya (official WhatsApp API se)!",
+    showTo: true,
+  },
+  fbpost: {
+    api: "/api/facebook",
+    title: "📘 Facebook Page post",
+    border: "border-blue-400/40 bg-blue-500/5",
+    btn: "bg-blue-600 hover:bg-blue-500",
+    cta: "📘 Post to Facebook",
+    sent: "✅ Post ho gaya (official Meta API se)!",
+    showTo: false,
+  },
+  telegram: {
+    api: "/api/telegram",
+    title: "✈️ Telegram message",
+    border: "border-sky-400/40 bg-sky-500/5",
+    btn: "bg-sky-600 hover:bg-sky-500",
+    cta: "✈️ Send on Telegram",
+    sent: "✅ Bhej diya (official Telegram API se)!",
+    showTo: true,
+  },
+};
+
+function ActionCard({ kind, to, text }: { kind: ActionKind; to?: string; text: string }) {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [err, setErr] = useState("");
-  const isWa = kind === "whatsapp";
+  const meta = ACTION_META[kind];
 
   const doSend = async () => {
     setStatus("sending");
     setErr("");
     try {
-      const r = await fetch(isWa ? "/api/whatsapp" : "/api/facebook", {
+      const r = await fetch(meta.api, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isWa ? { to, text } : { text }),
+        body: JSON.stringify(meta.showTo ? { to, text } : { text }),
       });
       const d = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !d.ok) {
@@ -872,29 +917,25 @@ function ActionCard({ kind, to, text }: { kind: "whatsapp" | "fbpost"; to?: stri
     }
   };
 
+  const toLabel = kind === "whatsapp" ? `+${(to || "").replace(/[^\d]/g, "")}` : to;
+
   return (
-    <div
-      className={`rounded-xl border p-3 my-2 ${
-        isWa ? "border-emerald-400/40 bg-emerald-500/5" : "border-blue-400/40 bg-blue-500/5"
-      }`}
-    >
+    <div className={`rounded-xl border p-3 my-2 ${meta.border}`}>
       <div className="flex items-center gap-2 text-sm font-semibold mb-1">
-        {isWa ? "🟢 WhatsApp message" : "📘 Facebook Page post"}
-        {isWa && to ? <span className="text-brand-100/60 font-normal">→ +{to.replace(/[^\d]/g, "")}</span> : null}
+        {meta.title}
+        {meta.showTo && to ? <span className="text-brand-100/60 font-normal">→ {toLabel}</span> : null}
       </div>
       <p className="whitespace-pre-wrap text-sm text-brand-50/90 mb-2">{text}</p>
       {status === "sent" ? (
-        <div className="text-emerald-300 text-sm font-medium">✅ Bhej diya (official Meta API se)!</div>
+        <div className="text-emerald-300 text-sm font-medium">{meta.sent}</div>
       ) : (
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={doSend}
             disabled={status === "sending"}
-            className={`px-4 py-1.5 rounded-lg text-white text-sm font-semibold disabled:opacity-50 transition-colors ${
-              isWa ? "bg-emerald-600 hover:bg-emerald-500" : "bg-blue-600 hover:bg-blue-500"
-            }`}
+            className={`px-4 py-1.5 rounded-lg text-white text-sm font-semibold disabled:opacity-50 transition-colors ${meta.btn}`}
           >
-            {status === "sending" ? "Bhej raha…" : isWa ? "📲 Send on WhatsApp" : "📘 Post to Facebook"}
+            {status === "sending" ? "Bhej raha…" : meta.cta}
           </button>
           {status === "error" ? (
             <span className="text-rose-300 text-xs max-w-[300px]">{err}</span>

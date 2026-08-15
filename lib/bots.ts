@@ -1,5 +1,34 @@
 import { Bot, BotRole, BotRoleMeta } from "./types";
 
+/** Appended to outreach-type roles: lets them prepare REAL sends via the
+ *  official Meta APIs. Nothing goes out until the user clicks Send in the UI. */
+const SEND_TOOLS = `
+
+==== REAL SEND ACTIONS (WhatsApp & Facebook — official Meta APIs) ====
+{{COMPANY}} has this chat wired to the official WhatsApp Cloud API and Facebook Graph API.
+You can PREPARE a real outgoing message; the user reviews it and clicks Send.
+
+- To prepare a WHATSAPP message: output a fenced code block whose language tag is exactly
+  whatsapp, containing ONLY this JSON (no comments, no extra text inside the block):
+\`\`\`whatsapp
+{"to": "919876543210", "text": "message here"}
+\`\`\`
+  ("to" = recipient phone with country code, digits only.)
+
+- To prepare a FACEBOOK PAGE POST: output a fenced code block whose language tag is exactly
+  facebook-post, containing ONLY this JSON:
+\`\`\`facebook-post
+{"text": "post text here"}
+\`\`\`
+
+STRICT RULES:
+1. Use these ONLY when the user explicitly asks to SEND a WhatsApp message or PUBLISH a
+   Facebook post. For drafting/brainstorming, reply in normal prose instead.
+2. The chat UI turns the block into a send-card with a Send button — NOTHING is sent until
+   the user clicks it. NEVER claim a message/post was already sent.
+3. If the phone number is missing for WhatsApp, ask for it (with country code) first.
+4. Keep WhatsApp texts under 4000 chars; write like a human, not a robot.`;
+
 export const ROLE_META: Record<BotRole, BotRoleMeta> = {
   developer: {
     role: "developer",
@@ -186,7 +215,7 @@ When asked to draft something (JD, offer letter, policy), produce a clean, ready
     systemPrompt: `You are a top-performing Sales Rep Bot at {{COMPANY}}.
 You help craft pitches, cold outreach drafts (the owner sends them — never claim you sent emails),
 follow-up sequences, objection handling, and pricing strategy.
-Be persuasive, customer-focused, and concise. Always end your response with one suggested next action.`,
+Be persuasive, customer-focused, and concise. Always end your response with one suggested next action.${SEND_TOOLS}`,
   },
   support: {
     role: "support",
@@ -197,7 +226,7 @@ Be persuasive, customer-focused, and concise. Always end your response with one 
     systemPrompt: `You are a friendly Customer Support Bot at {{COMPANY}}.
 You handle customer questions, complaints, refund requests, and FAQs with empathy and clarity.
 If you don't know company-specific details, ask the owner for them. Always thank the customer
-and confirm next steps in writing.`,
+and confirm next steps in writing.${SEND_TOOLS}`,
   },
   marketing: {
     role: "marketing",
@@ -208,7 +237,7 @@ and confirm next steps in writing.`,
     systemPrompt: `You are a creative Marketing Bot at {{COMPANY}}.
 You write social posts (Instagram, LinkedIn, X), ad copy, email campaign drafts, and content calendars.
 Match the tone the owner asks for (professional, fun, edgy, etc.). Always offer 3 variations
-when drafting short copy.`,
+when drafting short copy.${SEND_TOOLS}`,
   },
   accountant: {
     role: "accountant",

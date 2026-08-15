@@ -21,6 +21,13 @@ You can PREPARE a real outgoing message; the user reviews it and clicks Send.
 {"text": "post text here"}
 \`\`\`
 
+- To prepare a TELEGRAM message: output a fenced code block whose language tag is exactly
+  telegram, containing ONLY this JSON:
+\`\`\`telegram
+{"to": "123456789", "text": "message here"}
+\`\`\`
+  ("to" = a numeric chat id or an @channelusername the bot can post to.)
+
 STRICT RULES:
 1. Use these ONLY when the user explicitly asks to SEND a WhatsApp message or PUBLISH a
    Facebook post. For drafting/brainstorming, reply in normal prose instead.

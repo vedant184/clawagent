@@ -774,6 +774,12 @@ function MessageBubble({ msg, bot }: { msg: ChatMessage; bot: Bot }) {
           if (seg.type === "site") {
             return <SitePreview key={i} html={seg.text} />;
           }
+          if (seg.type === "whatsapp") {
+            return <ActionCard key={i} kind="whatsapp" to={seg.to} text={seg.text} />;
+          }
+          if (seg.type === "fbpost") {
+            return <ActionCard key={i} kind="fbpost" text={seg.text} />;
+          }
           return (
             <p
               key={i}
@@ -789,32 +795,116 @@ function MessageBubble({ msg, bot }: { msg: ChatMessage; bot: Bot }) {
 }
 
 interface Segment {
-  type: "text" | "browser" | "site";
+  type: "text" | "browser" | "site" | "whatsapp" | "fbpost";
   text: string;
+  to?: string;
 }
 
 /**
  * Parse an assistant message into segments:
- * - ```html-site ... ```  → live website preview
- * - [BROWSING] ...         → browser-control animation
- * - everything else        → plain text
+ * - ```html-site ... ```      → live website preview
+ * - ```whatsapp {json} ```    → confirm-and-send WhatsApp card
+ * - ```facebook-post {json}```→ confirm-and-post Facebook card
+ * - [BROWSING] ...            → browser-control animation
+ * - everything else           → plain text
  */
 function parseAssistantContent(content: string): Segment[] {
   const out: Segment[] = [];
-  const siteRegex = /```html-site\s*\n([\s\S]*?)```/gi;
+  const fenceRegex = /```(html-site|whatsapp|facebook-post)\s*\n([\s\S]*?)```/gi;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = siteRegex.exec(content)) !== null) {
+  while ((match = fenceRegex.exec(content)) !== null) {
     const before = content.slice(lastIndex, match.index);
     if (before.trim().length) out.push(...splitOnBrowsing(before));
-    out.push({ type: "site", text: match[1].trim() });
+    const kind = match[1].toLowerCase();
+    const inner = match[2].trim();
+    if (kind === "html-site") {
+      out.push({ type: "site", text: inner });
+    } else if (kind === "whatsapp") {
+      try {
+        const o = JSON.parse(inner) as { to?: string; text?: string; message?: string };
+        out.push({ type: "whatsapp", to: String(o.to || ""), text: String(o.text || o.message || "") });
+      } catch {
+        out.push({ type: "text", text: inner });
+      }
+    } else if (kind === "facebook-post") {
+      try {
+        const o = JSON.parse(inner) as { text?: string; message?: string };
+        out.push({ type: "fbpost", text: String(o.text || o.message || inner) });
+      } catch {
+        out.push({ type: "fbpost", text: inner });
+      }
+    }
     lastIndex = match.index + match[0].length;
   }
   const tail = content.slice(lastIndex);
   if (tail.trim().length) out.push(...splitOnBrowsing(tail));
   if (out.length === 0) out.push({ type: "text", text: content });
   return out;
+}
+
+/** Confirm-and-send card — kuch bhi USER ke click ke bina nahi jata. */
+function ActionCard({ kind, to, text }: { kind: "whatsapp" | "fbpost"; to?: string; text: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [err, setErr] = useState("");
+  const isWa = kind === "whatsapp";
+
+  const doSend = async () => {
+    setStatus("sending");
+    setErr("");
+    try {
+      const r = await fetch(isWa ? "/api/whatsapp" : "/api/facebook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isWa ? { to, text } : { text }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) {
+        setErr(d.error || "Send fail ho gaya.");
+        setStatus("error");
+        return;
+      }
+      setStatus("sent");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Network error");
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div
+      className={`rounded-xl border p-3 my-2 ${
+        isWa ? "border-emerald-400/40 bg-emerald-500/5" : "border-blue-400/40 bg-blue-500/5"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-sm font-semibold mb-1">
+        {isWa ? "🟢 WhatsApp message" : "📘 Facebook Page post"}
+        {isWa && to ? <span className="text-brand-100/60 font-normal">→ +{to.replace(/[^\d]/g, "")}</span> : null}
+      </div>
+      <p className="whitespace-pre-wrap text-sm text-brand-50/90 mb-2">{text}</p>
+      {status === "sent" ? (
+        <div className="text-emerald-300 text-sm font-medium">✅ Bhej diya (official Meta API se)!</div>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={doSend}
+            disabled={status === "sending"}
+            className={`px-4 py-1.5 rounded-lg text-white text-sm font-semibold disabled:opacity-50 transition-colors ${
+              isWa ? "bg-emerald-600 hover:bg-emerald-500" : "bg-blue-600 hover:bg-blue-500"
+            }`}
+          >
+            {status === "sending" ? "Bhej raha…" : isWa ? "📲 Send on WhatsApp" : "📘 Post to Facebook"}
+          </button>
+          {status === "error" ? (
+            <span className="text-rose-300 text-xs max-w-[300px]">{err}</span>
+          ) : (
+            <span className="text-brand-100/40 text-xs">Aapke is click ke baad hi jayega</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function splitOnBrowsing(content: string): Segment[] {

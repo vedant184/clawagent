@@ -271,7 +271,7 @@ export default function DashboardPage() {
             className="w-full text-left text-sm px-3 py-2 mb-1 rounded-lg text-sky-300/90 hover:bg-sky-500/10 transition-colors flex items-center gap-2"
           >
             🖥️ Connect Browser
-            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/25">soon</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 border border-emerald-400/25">new</span>
           </button>
           <div className="text-xs text-emerald-100/50 mb-2">Powered by Clawagent</div>
           <button onClick={handleLogout} className="w-full text-left text-sm px-3 py-2 rounded-lg text-emerald-100/70 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">

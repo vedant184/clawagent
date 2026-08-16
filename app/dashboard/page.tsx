@@ -76,22 +76,12 @@ export default function DashboardPage() {
   const [memSaved, setMemSaved] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [pairCode, setPairCode] = useState("····-····");
-  const [notify, setNotify] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (memOpen) setMemText(getMemory());
   }, [memOpen]);
 
-  useEffect(() => {
-    if (!browserOpen) return;
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const gen = (n: number) =>
-      Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-    setPairCode(`${gen(4)}-${gen(4)}`);
-    setNotify(false);
-  }, [browserOpen]);
 
   useEffect(() => {
     const p = getProfile();
@@ -543,10 +533,10 @@ export default function DashboardPage() {
               <div>
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   🖥️ Connect Browser
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">Coming soon</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 border border-emerald-400/30 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ca-ring" /> Live</span>
                 </h3>
                 <p className="text-xs text-emerald-100/55 mt-1">
-                  Apna browser jodo — phir bots aapke <b>saamne</b> Google, Facebook, WhatsApp jaise sites pe kaam karte hue dikhein. Live preview neeche 👇
+                  Ab ready hai! Extension install karke bots ko apne <b>browser</b> me chalao — Google, Facebook jaise sites pe, aapke <b>saamne</b>. Live preview neeche 👇
                 </p>
               </div>
               <button onClick={() => setBrowserOpen(false)} className="text-emerald-100/50 hover:text-emerald-100 text-lg leading-none">✕</button>
@@ -556,37 +546,31 @@ export default function DashboardPage() {
               {/* LIVE control preview — the CONTROLLED site is what shows, being driven */}
               <LiveBrowserDemo />
 
-              {/* pairing code */}
-              <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-4 text-center">
-                <div className="text-[11px] uppercase tracking-widest text-sky-200/60 mb-1">Pairing code (demo)</div>
-                <div className="font-mono text-2xl font-bold tracking-[0.3em] text-sky-200">{pairCode}</div>
-                <p className="text-[11px] text-emerald-100/45 mt-1">Jab extension ready hoga, ye code usme daalke browser paired ho jayega.</p>
-              </div>
-
-              {/* how it will work */}
-              <div className="text-sm">
-                <div className="font-semibold text-emerald-200 mb-1.5">Ye aise kaam karega:</div>
-                <ol className="list-decimal list-inside space-y-1 text-emerald-100/70 text-[13px]">
-                  <li>ClawAgent ka <b>Chrome extension</b> install karo</li>
-                  <li>Upar wala <b>pairing code</b> extension me daalo</li>
-                  <li>Bots aapke saamne current page pe kaam karein — aap kabhi bhi rok sakte ho</li>
+              {/* download + install — the REAL extension */}
+              <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-4">
+                <div className="font-semibold text-sky-200 mb-2">Extension ready hai — install karo (1 min):</div>
+                <a
+                  href="/clawagent-browser-operator.zip"
+                  download
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-emerald-950 bg-gradient-to-r from-sky-400 to-emerald-300 hover:brightness-110 transition-all"
+                >
+                  ⬇️ Download extension (.zip)
+                </a>
+                <ol className="list-decimal list-inside space-y-1 text-emerald-100/70 text-[13px] mt-3">
+                  <li>Zip download karke <b>unzip</b> karo</li>
+                  <li>Chrome me <b>chrome://extensions</b> kholo → <b>Developer mode</b> ON</li>
+                  <li><b>Load unpacked</b> → unzipped folder select karo</li>
+                  <li>Kisi site pe jao → extension icon → <b>🔌 Test connection</b> → command likho → <b>Start</b></li>
                 </ol>
               </div>
 
               {/* honest note */}
               <div className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3 text-[12px] text-amber-100/70">
-                <b className="text-amber-300">Dhyan do:</b> Browser control tabhi chalega jab aap saamne ho (safety ke liye). Facebook/Google/WhatsApp par <b>auto-login nahi</b> hota — wo platforms bots ko ban karte hain. Un par real, apne-aap sending ke liye 🔌 <b>Connections</b> (official API) use karo.
+                <b className="text-amber-300">Dhyan do:</b> Extension aapke <b>saamne</b> chalta hai (safety), aur login/OTP/CAPTCHA nahi bharta. Facebook/Google/WhatsApp par <b>auto-login nahi</b> hota — wo platforms bots ko ban karte hain. Un par apne-aap sending ke liye 🔌 <b>Connections</b> (official API) use karo.
               </div>
 
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setNotify(true)}
-                  disabled={notify}
-                  className="px-5 py-2 rounded-xl font-semibold text-emerald-950 bg-gradient-to-r from-sky-400 to-emerald-300 hover:brightness-110 transition-all disabled:opacity-70"
-                >
-                  {notify ? "✓ Ready hone par bata denge!" : "🔔 Ready ho toh notify karo"}
-                </button>
-                <button onClick={() => setBrowserOpen(false)} className="text-sm text-emerald-100/60 hover:text-emerald-100">Band karo</button>
+              <div className="flex">
+                <button onClick={() => setBrowserOpen(false)} className="ml-auto text-sm text-emerald-100/60 hover:text-emerald-100">Band karo</button>
               </div>
             </div>
           </div>
